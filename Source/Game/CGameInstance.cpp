@@ -5,17 +5,17 @@
 
 UCGameInstance::UCGameInstance(const FObjectInitializer& ObjectInitializer)
 {
-	GLog->Log("GameInstance Construction Called");
-
 	ConstructorHelpers::FClassFinder<UUserWidget> mainMenuClass(TEXT("/Game/Widgets/WB_MainMenu"));
-
 	if (mainMenuClass.Succeeded())
 		MainMenuClass = mainMenuClass.Class;
+
+	ConstructorHelpers::FClassFinder<UUserWidget> inGameMenuClass(TEXT("/Game/Widgets/WB_InGameMenu"));
+	if (inGameMenuClass.Succeeded())
+		InGameMenuClass = inGameMenuClass.Class;
 }
 
 void UCGameInstance::Init()
 {
-	GLog->Log("GameInstance Init Called");
 }
 
 void UCGameInstance::LoadMainMenu()
@@ -26,6 +26,16 @@ void UCGameInstance::LoadMainMenu()
 	if (MainMenu == nullptr) return;
 	MainMenu->Setup();
 	MainMenu->SetMenuInterface(this);
+}
+
+void UCGameInstance::LoadInGameMenu()
+{
+	if (InGameMenuClass == nullptr) return;
+
+	UCMenuWidget* inGameMenu = CreateWidget<UCMenuWidget>(this, InGameMenuClass);
+	if (inGameMenu == nullptr) return;
+	inGameMenu->SetMenuInterface(this);
+	inGameMenu->Setup();
 }
 
 void UCGameInstance::Host()
@@ -46,9 +56,11 @@ void UCGameInstance::Host()
 
 void UCGameInstance::Join(const FString& InAddress)
 {
+	if (MainMenu != nullptr)
+		MainMenu->Teardown();
+
 	UEngine* engine = GetEngine();
 	if (engine == nullptr) return;
-
 	engine->AddOnScreenDebugMessage(0, 2.f, FColor::Green, FString::Printf(TEXT("Join to %s"), *InAddress));
 
 	APlayerController* controller = GetFirstLocalPlayerController();
@@ -57,4 +69,11 @@ void UCGameInstance::Join(const FString& InAddress)
 	// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
 	// ETravelType 
 	controller->ClientTravel(InAddress, ETravelType::TRAVEL_Absolute);
+}
+
+void UCGameInstance::LoadMainMenuLevel()
+{
+	APlayerController* controller = GetFirstLocalPlayerController();
+	if (controller == nullptr) return;
+	controller->ClientTravel("/Game/Maps/MainMenu", ETravelType::TRAVEL_Absolute);
 }
