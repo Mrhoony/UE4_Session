@@ -30,6 +30,9 @@ void UCGameInstance::Init()
 		{
 			SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UCGameInstance::OnCreateSessionComplete);
 			SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UCGameInstance::OnDestroySessionComplete);
+			SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UCGameInstance::OnFindSessionsComplete);
+
+			
 		}
 	}
 	else
@@ -84,25 +87,31 @@ void UCGameInstance::CreateSession()
 	if (SessionInterface.IsValid())
 	{
 		FOnlineSessionSettings sessionSettings;
+		sessionSettings.bIsLANMatch = true;
+		sessionSettings.NumPublicConnections = 500;
+		sessionSettings.bShouldAdvertise = true;
 		SessionInterface->CreateSession(0, SESSION_NAME, sessionSettings);
 	}
 }
 
 void UCGameInstance::Join(const FString& InAddress)
 {
+	//if (MainMenu != nullptr)
+	//	MainMenu->Teardown();
+
+	//UEngine* engine = GetEngine();
+	//if (engine == nullptr) return;
+	//engine->AddOnScreenDebugMessage(0, 2.f, FColor::Green, FString::Printf(TEXT("Join to %s"), *InAddress));
+
+	//APlayerController* controller = GetFirstLocalPlayerController();
+	//if (controller == nullptr) return;
+
+	//// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
+	//// ETravelType 
+	//controller->ClientTravel(InAddress, ETravelType::TRAVEL_Absolute);
+
 	if (MainMenu != nullptr)
-		MainMenu->Teardown();
-
-	UEngine* engine = GetEngine();
-	if (engine == nullptr) return;
-	engine->AddOnScreenDebugMessage(0, 2.f, FColor::Green, FString::Printf(TEXT("Join to %s"), *InAddress));
-
-	APlayerController* controller = GetFirstLocalPlayerController();
-	if (controller == nullptr) return;
-
-	// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
-	// ETravelType 
-	controller->ClientTravel(InAddress, ETravelType::TRAVEL_Absolute);
+		MainMenu->SetServerList({"Session1", "Session2"});
 }
 
 void UCGameInstance::LoadMainMenuLevel()
@@ -110,6 +119,17 @@ void UCGameInstance::LoadMainMenuLevel()
 	APlayerController* controller = GetFirstLocalPlayerController();
 	if (controller == nullptr) return;
 	controller->ClientTravel("/Game/Maps/MainMenu", ETravelType::TRAVEL_Absolute);
+}
+
+void UCGameInstance::RefreshServerList()
+{
+	SessionSearch = MakeShareable(new FOnlineSessionSearch());
+	if (SessionSearch.IsValid())
+	{
+		SessionSearch->bIsLanQuery = true;
+		UE_LOG(LogTemp, Error, TEXT("Start Find Sessions"));
+		SessionInterface->FindSessions(0, SessionSearch.ToSharedRef());
+	}
 }
 
 void UCGameInstance::OnCreateSessionComplete(FName InSessionName, bool InSuccess)
@@ -140,4 +160,23 @@ void UCGameInstance::OnDestroySessionComplete(FName InSessionName, bool InSucces
 {
 	if (InSuccess == true)
 		CreateSession();
+}
+
+void UCGameInstance::OnFindSessionsComplete(bool InSuccess)
+{
+	if (InSuccess == true && SessionSearch.IsValid() && MainMenu != nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Finished Find Sessions"));
+
+		TArray<FString> serverNames;
+		for (const FOnlineSessionSearchResult& searchResult : SessionSearch->SearchResults)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Found Session ID : %s"), *searchResult.GetSessionIdStr());
+			UE_LOG(LogTemp, Warning, TEXT("Ping : %d"), searchResult.PingInMs);
+
+			serverNames.Add(searchResult.GetSessionIdStr());
+		}
+
+		MainMenu->SetServerList(serverNames);
+	}
 }
