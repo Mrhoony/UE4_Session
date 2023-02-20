@@ -37,16 +37,19 @@ bool UCMainMenu::Initialize()
 	return true;
 }
 
-void UCMainMenu::SetServerList(TArray<FString> InServerNames)
+void UCMainMenu::SetServerList(TArray<FServerData> InServerNames)
 {
 	ServerList->ClearChildren();
 
-	for (FString& serverName : InServerNames)
+	for (FServerData& serverData : InServerNames)
 	{
 		UCServerRow* row = CreateWidget<UCServerRow>(this, ServerRowClass);
 		if (row == nullptr)return;
 
-		row->ServerName->SetText(FText::FromString(serverName));
+		row->ServerName->SetText(FText::FromString(serverData.Name));
+		row->HostUser->SetText(FText::FromString(serverData.HostUserName));
+		FString fractionText = FString::Printf(TEXT("%d/%d"), serverData.CurrentPlayers, serverData.MaxPlayers);
+		row->ConnectionFraction->SetText(FText::FromString(fractionText));
 		row->Setup(this, ServerList->GetAllChildren().Num());
 
 		ServerList->AddChild(row);
@@ -56,6 +59,7 @@ void UCMainMenu::SetServerList(TArray<FString> InServerNames)
 void UCMainMenu::SetSelectedIndex(uint32 Index)
 {
 	SelectedIndex = Index;
+	UpdateChildren();
 }
 
 void UCMainMenu::HostServer()
@@ -66,21 +70,14 @@ void UCMainMenu::HostServer()
 
 void UCMainMenu::JoinServer()
 {
-	if (SelectedIndex.IsSet())
+	if (SelectedIndex.IsSet() && MenuInterface != nullptr)
 	{
 		UE_LOG(LogTemp, Display, TEXT("Selected Index : %d"), SelectedIndex.GetValue());
+		MenuInterface->Join(SelectedIndex.GetValue());
 	}
 	else
 	{
 		UE_LOG(LogTemp, Display, TEXT("Selected Index is not set"));
-	}
-
-	if (MenuInterface != nullptr)
-	{
-		/*if (IPAddressField == nullptr) return;
-		const FString& address = IPAddressField->GetText().ToString();*/
-
-		MenuInterface->Join("");
 	}
 }
 
@@ -112,4 +109,16 @@ void UCMainMenu::QuitPressed()
 	if (controller == nullptr) return;
 
 	controller->ConsoleCommand("Quit");
+}
+
+void UCMainMenu::UpdateChildren()
+{
+	for (int32 i = 0; i < ServerList->GetChildrenCount(); i++)
+	{
+		UCServerRow* serverRow = Cast<UCServerRow>(ServerList->GetChildAt(i));
+		if (serverRow != nullptr)
+		{
+			serverRow->bSelected = (SelectedIndex.IsSet()) && (SelectedIndex.GetValue() == i);
+		}
+	}
 }

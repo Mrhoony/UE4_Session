@@ -2,7 +2,7 @@
 #include "Engine/Engine.h"
 #include "Blueprint/UserWidget.h"
 #include "Widgets/CMainMenu.h"
-#include "Interfaces/OnlineSessionInterface.h"
+
 #include "OnlineSessionSettings.h"
 
 const static FName SESSION_NAME = TEXT("GameSession");
@@ -31,8 +31,7 @@ void UCGameInstance::Init()
 			SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UCGameInstance::OnCreateSessionComplete);
 			SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UCGameInstance::OnDestroySessionComplete);
 			SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UCGameInstance::OnFindSessionsComplete);
-
-			
+			SessionInterface->OnJoinSessionCompleteDelegates.AddUObject(this, &UCGameInstance::OnJoinSessionsComplete);
 		}
 	}
 	else
@@ -87,31 +86,31 @@ void UCGameInstance::CreateSession()
 	if (SessionInterface.IsValid())
 	{
 		FOnlineSessionSettings sessionSettings;
-		sessionSettings.bIsLANMatch = true;
+
+		if (IOnlineSubsystem::Get()->GetSubsystemName() == "NULL")
+		{
+			sessionSettings.bIsLANMatch = true;
+		}
+		else
+		{
+			sessionSettings.bIsLANMatch = false;
+		}
 		sessionSettings.NumPublicConnections = 500;
 		sessionSettings.bShouldAdvertise = true;
+		sessionSettings.bUsesPresence = true;
 		SessionInterface->CreateSession(0, SESSION_NAME, sessionSettings);
 	}
 }
 
-void UCGameInstance::Join(const FString& InAddress)
+void UCGameInstance::Join(const uint32& Index)
 {
-	//if (MainMenu != nullptr)
-	//	MainMenu->Teardown();
-
-	//UEngine* engine = GetEngine();
-	//if (engine == nullptr) return;
-	//engine->AddOnScreenDebugMessage(0, 2.f, FColor::Green, FString::Printf(TEXT("Join to %s"), *InAddress));
-
-	//APlayerController* controller = GetFirstLocalPlayerController();
-	//if (controller == nullptr) return;
-
-	//// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
-	//// ETravelType 
-	//controller->ClientTravel(InAddress, ETravelType::TRAVEL_Absolute);
+	if (SessionInterface.IsValid() == false) return;
+	if (SessionSearch.IsValid() == false) return;
 
 	if (MainMenu != nullptr)
-		MainMenu->SetServerList({"Session1", "Session2"});
+		MainMenu->Teardown();
+
+	SessionInterface->JoinSession(0, SESSION_NAME, SessionSearch->SearchResults[Index]);
 }
 
 void UCGameInstance::LoadMainMenuLevel()
@@ -126,7 +125,9 @@ void UCGameInstance::RefreshServerList()
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	if (SessionSearch.IsValid())
 	{
-		SessionSearch->bIsLanQuery = true;
+		//SessionSearch->bIsLanQuery = true;
+		SessionSearch->MaxSearchResults = 100; // 기본값 1, Equals 여부를 검사하게되면 검색이 안되기 때문에 큰 숫자 100을 넣음
+		SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
 		UE_LOG(LogTemp, Error, TEXT("Start Find Sessions"));
 		SessionInterface->FindSessions(0, SessionSearch.ToSharedRef());
 	}
@@ -168,15 +169,43 @@ void UCGameInstance::OnFindSessionsComplete(bool InSuccess)
 	{
 		UE_LOG(LogTemp, Error, TEXT("Finished Find Sessions"));
 
-		TArray<FString> serverNames;
+		TArray<FServerData> serverDatas;
 		for (const FOnlineSessionSearchResult& searchResult : SessionSearch->SearchResults)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Found Session ID : %s"), *searchResult.GetSessionIdStr());
 			UE_LOG(LogTemp, Warning, TEXT("Ping : %d"), searchResult.PingInMs);
 
-			serverNames.Add(searchResult.GetSessionIdStr());
+			FServerData data;
+			data.Name = searchResult.GetSessionIdStr();
+			data.MaxPlayers = searchResult.Session.SessionSettings.NumPublicConnections;
+			data.CurrentPlayers = data.MaxPlayers - searchResult.Session.NumOpenPublicConnections;
+			data.HostUserName = searchResult.Session.OwningUserName;
+			serverDatas.Add(data);
 		}
 
-		MainMenu->SetServerList(serverNames);
+		MainMenu->SetServerList(serverDatas);
 	}
+}
+
+void UCGameInstance::OnJoinSessionsComplete(FName InSessionName, EOnJoinSessionCompleteResult::Type InResult)
+{
+	if (SessionInterface.IsValid() == false) return;
+
+	FString address;
+	if (SessionInterface->GetResolvedConnectString(InSessionName, address) == false)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Could Not Get IP Address"));
+		return;
+	}
+
+	UEngine* engine = GetEngine();
+	if (engine == nullptr) return;
+	engine->AddOnScreenDebugMessage(0, 2.f, FColor::Green, FString::Printf(TEXT("Join to %s"), *address));
+
+	APlayerController* controller = GetFirstLocalPlayerController();
+	if (controller == nullptr) return;
+
+	// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
+	// ETravelType
+	controller->ClientTravel(address, ETravelType::TRAVEL_Absolute);
 }

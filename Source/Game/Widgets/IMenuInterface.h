@@ -16,7 +16,7 @@ class GAME_API IIMenuInterface
 
 public:
 	virtual void Host() = 0;
-	virtual void Join(const FString& InAddress) = 0;
+	virtual void Join(const uint32& Index) = 0;
 	virtual void LoadMainMenuLevel() = 0;
 	virtual void RefreshServerList() = 0;
 };
