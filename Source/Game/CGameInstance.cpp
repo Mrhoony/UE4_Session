@@ -2,10 +2,11 @@
 #include "Engine/Engine.h"
 #include "Blueprint/UserWidget.h"
 #include "Widgets/CMainMenu.h"
-
+#include "OnlineSubsystemTypes.h"
 #include "OnlineSessionSettings.h"
 
 const static FName SESSION_NAME = TEXT("GameSession");
+const static FName SERVER_NAME_SETTINGS_KEY = TEXT("ServerName");
 
 UCGameInstance::UCGameInstance(const FObjectInitializer& ObjectInitializer)
 {
@@ -38,6 +39,9 @@ void UCGameInstance::Init()
 	{
 		UE_LOG(LogTemp, Error, TEXT("Not Found OSS"));
 	}
+
+	if(GEngine != nullptr)
+		GEngine->OnNetworkFailure().AddUObject(this, &UCGameInstance::OnNetworkFailure);
 }
 
 void UCGameInstance::LoadMainMenu()
@@ -60,8 +64,10 @@ void UCGameInstance::LoadInGameMenu()
 	inGameMenu->Setup();
 }
 
-void UCGameInstance::Host()
+void UCGameInstance::Host(FString& InServerName)
 {
+	DesiredServerName = InServerName;
+
 	if (SessionInterface.IsValid())
 	{
 		auto existingSession = SessionInterface->GetNamedSession(SESSION_NAME);
@@ -98,6 +104,8 @@ void UCGameInstance::CreateSession()
 		sessionSettings.NumPublicConnections = 500;
 		sessionSettings.bShouldAdvertise = true;
 		sessionSettings.bUsesPresence = true;
+		sessionSettings.Set(SERVER_NAME_SETTINGS_KEY, DesiredServerName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+
 		SessionInterface->CreateSession(0, SESSION_NAME, sessionSettings);
 	}
 }
@@ -133,6 +141,12 @@ void UCGameInstance::RefreshServerList()
 	}
 }
 
+void UCGameInstance::StartSession()
+{
+	if (SessionInterface.IsValid())
+		SessionInterface->StartSession(SESSION_NAME);
+}
+
 void UCGameInstance::OnCreateSessionComplete(FName InSessionName, bool InSuccess)
 {
 	if (InSuccess == false)
@@ -154,7 +168,7 @@ void UCGameInstance::OnCreateSessionComplete(FName InSessionName, bool InSuccess
 	UWorld* world = GetWorld();
 	if (world == nullptr)return; // 트랜지션맵의 경우 월드가 리턴이 안됨
 
-	world->ServerTravel("/Game/Maps/Play?listen");
+	world->ServerTravel("/Game/Maps/Lobby?listen");
 }
 
 void UCGameInstance::OnDestroySessionComplete(FName InSessionName, bool InSuccess)
@@ -176,10 +190,21 @@ void UCGameInstance::OnFindSessionsComplete(bool InSuccess)
 			UE_LOG(LogTemp, Warning, TEXT("Ping : %d"), searchResult.PingInMs);
 
 			FServerData data;
-			data.Name = searchResult.GetSessionIdStr();
+			//data.Name = searchResult.GetSessionIdStr();
 			data.MaxPlayers = searchResult.Session.SessionSettings.NumPublicConnections;
 			data.CurrentPlayers = data.MaxPlayers - searchResult.Session.NumOpenPublicConnections;
 			data.HostUserName = searchResult.Session.OwningUserName;
+			
+			FString serverName;
+			if (searchResult.Session.SessionSettings.Get(SERVER_NAME_SETTINGS_KEY, serverName))
+			{
+				data.Name = serverName;
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Session Name Not found"));
+			}
+
 			serverDatas.Add(data);
 		}
 
@@ -208,4 +233,9 @@ void UCGameInstance::OnJoinSessionsComplete(FName InSessionName, EOnJoinSessionC
 	// 스팀 OSS가 일종의 가상 공인아이피를 부여해준다
 	// ETravelType
 	controller->ClientTravel(address, ETravelType::TRAVEL_Absolute);
+}
+
+void UCGameInstance::OnNetworkFailure(UWorld* InWorld, UNetDriver* InNetDriver, ENetworkFailure::Type InType, const FString& InString)
+{
+	LoadMainMenuLevel();
 }

@@ -35,6 +35,7 @@ private:
 	UFUNCTION()		void OpenJoinMenu();
 	UFUNCTION()		void OpenMainMenu();
 	UFUNCTION()		void QuitPressed();
+	UFUNCTION()		void OpenHostMenu();
 
 private:
 	void UpdateChildren();
@@ -43,14 +44,21 @@ private:
 	UPROPERTY(meta = (BindWidget)) // 변수명과 동일한 실제 위젯을 찾아준다.
 		class UButton* HostButton;
 
+	UPROPERTY(meta = (BindWidget))		class UWidgetSwitcher* MenuSwitcher;	
+	
+	UPROPERTY(meta = (BindWidget))		class UWidget* MainMenu;
 	UPROPERTY(meta = (BindWidget))		class UButton* JoinButton;
+	UPROPERTY(meta = (BindWidget))		class UButton* QuitButton;
+
+	UPROPERTY(meta = (BindWidget))		class UWidget* JoinMenu;
 	UPROPERTY(meta = (BindWidget))		class UButton* ConfirmJoinMenuButton;
 	UPROPERTY(meta = (BindWidget))		class UButton* CancelJoinMenuButton;
-	UPROPERTY(meta = (BindWidget))		class UButton* QuitButton;
-	UPROPERTY(meta = (BindWidget))		class UWidget* MainMenu;
-	UPROPERTY(meta = (BindWidget))		class UWidget* JoinMenu;
-	UPROPERTY(meta = (BindWidget))		class UWidgetSwitcher* MenuSwitcher;	
 	UPROPERTY(meta = (BindWidget))		class UPanelWidget* ServerList;
+	
+	UPROPERTY(meta = (BindWidget))		class UWidget* HostMenu;
+	UPROPERTY(meta = (BindWidget))		class UEditableTextBox* ServerHostName;
+	UPROPERTY(meta = (BindWidget))		class UButton* CancelHostMenuButton;
+	UPROPERTY(meta = (BindWidget))		class UButton* ConfirmHostMenuButton;
 
 private:
 	TSubclassOf<class UUserWidget> ServerRowClass;

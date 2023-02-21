@@ -20,16 +20,19 @@ bool UCMainMenu::Initialize()
 	if (success == false) return false;
 	
 	if (HostButton == nullptr) return false;
-	HostButton->OnClicked.AddDynamic(this, &UCMainMenu::HostServer);
-
+	HostButton->OnClicked.AddDynamic(this, &UCMainMenu::OpenHostMenu);
 	if (JoinButton == nullptr) return false;
 	JoinButton->OnClicked.AddDynamic(this, &UCMainMenu::OpenJoinMenu);
 
 	if (CancelJoinMenuButton == nullptr) return false;
 	CancelJoinMenuButton->OnClicked.AddDynamic(this, &UCMainMenu::OpenMainMenu);
+	if (CancelHostMenuButton == nullptr) return false;
+	CancelHostMenuButton->OnClicked.AddDynamic(this, &UCMainMenu::OpenMainMenu);
 
 	if (ConfirmJoinMenuButton == nullptr) return false;
 	ConfirmJoinMenuButton->OnClicked.AddDynamic(this, &UCMainMenu::JoinServer);
+	if (ConfirmHostMenuButton == nullptr) return false;
+	ConfirmHostMenuButton->OnClicked.AddDynamic(this, &UCMainMenu::HostServer);
 
 	if (QuitButton == nullptr) return false;
 	QuitButton->OnClicked.AddDynamic(this, &UCMainMenu::QuitPressed);
@@ -65,7 +68,10 @@ void UCMainMenu::SetSelectedIndex(uint32 Index)
 void UCMainMenu::HostServer()
 {
 	if (MenuInterface != nullptr)
-		MenuInterface->Host();
+	{
+		FString serverName = ServerHostName->Text.ToString();
+		MenuInterface->Host(serverName);
+	}
 }
 
 void UCMainMenu::JoinServer()
@@ -109,6 +115,14 @@ void UCMainMenu::QuitPressed()
 	if (controller == nullptr) return;
 
 	controller->ConsoleCommand("Quit");
+}
+
+void UCMainMenu::OpenHostMenu()
+{
+	if (MenuSwitcher == nullptr) return;
+	if (HostMenu == nullptr) return;
+
+	MenuSwitcher->SetActiveWidget(HostMenu);
 }
 
 void UCMainMenu::UpdateChildren()

@@ -15,7 +15,7 @@ class GAME_API IIMenuInterface
 	GENERATED_BODY()
 
 public:
-	virtual void Host() = 0;
+	virtual void Host(FString& InServerName) = 0;
 	virtual void Join(const uint32& Index) = 0;
 	virtual void LoadMainMenuLevel() = 0;
 	virtual void RefreshServerList() = 0;
