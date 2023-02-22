@@ -1,12 +1,13 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "FP_FirstPersonCharacter.h"
+#include "Global.h"
+
 #include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Net/UnrealNetwork.h"
 
 #define COLLISION_WEAPON		ECC_GameTraceChannel1
 
@@ -141,6 +142,8 @@ void AFP_FirstPersonCharacter::OnFire()
 	{
 		DamagedComponent->AddImpulseAtLocation(ShootDir * WeaponDamage, Impact.Location);
 	}
+
+	OnServer();
 }
 
 void AFP_FirstPersonCharacter::MoveForward(float Value)
@@ -183,4 +186,58 @@ FHitResult AFP_FirstPersonCharacter::WeaponTrace(const FVector& StartTrace, cons
 	GetWorld()->LineTraceSingleByChannel(Hit, StartTrace, EndTrace, COLLISION_WEAPON, TraceParams);
 
 	return Hit;
+}
+
+void AFP_FirstPersonCharacter::OnServer_Implementation()
+{
+	//CLog::Print("Only Called On Server");
+
+	OnNetMulticast();
+	OnClient();
+	
+	RandomValue_YesReplicated++;
+}
+
+void AFP_FirstPersonCharacter::OnNetMulticast_Implementation()
+{
+	//CLog::Print("NetMulticast Called");
+
+	/*if (GetLocalRole() == ENetRole::ROLE_Authority)
+		CLog::Print("ROLE_Authority In NetMulticast", -1, 10.f, FColor::Purple);
+	if (GetLocalRole() == ENetRole::ROLE_AutonomousProxy)
+		CLog::Print("ROLE_AutonomousProxy In NetMulticast", -1, 10.f, FColor::Purple);
+	if (GetLocalRole() == ENetRole::ROLE_SimulatedProxy)
+		CLog::Print("ROLE_SimulatedProxy In NetMulticast", -1, 10.f, FColor::Purple);
+	if (GetLocalRole() == ENetRole::ROLE_MAX)
+		CLog::Print("ROLE_MAX In Client");
+	if (GetLocalRole() == ENetRole::ROLE_None)
+		CLog::Print("ROLE_None In Client");*/
+
+	CLog::Print("Replicated : " + FString::FromInt(RandomValue_YesReplicated));
+	CLog::Print("No Replicated : " + FString::FromInt(RandomValue_NoReplicated));
+}
+
+void AFP_FirstPersonCharacter::OnClient_Implementation()
+{
+	//CLog::Print("Only Called On Client");
+
+	/*if (GetLocalRole() == ENetRole::ROLE_Authority)
+		CLog::Print("ROLE_Authority In Client");
+	if (GetLocalRole() == ENetRole::ROLE_AutonomousProxy)
+		CLog::Print("ROLE_AutonomousProxy In Client");
+	if (GetLocalRole() == ENetRole::ROLE_SimulatedProxy)
+		CLog::Print("ROLE_SimulatedProxy In Client");
+	if (GetLocalRole() == ENetRole::ROLE_MAX)
+		CLog::Print("ROLE_MAX In Client");
+	if (GetLocalRole() == ENetRole::ROLE_None)
+		CLog::Print("ROLE_None In Client");*/
+
+	RandomValue_NoReplicated++;
+}
+
+void AFP_FirstPersonCharacter::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AFP_FirstPersonCharacter, RandomValue_YesReplicated);
 }

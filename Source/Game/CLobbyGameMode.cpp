@@ -33,5 +33,5 @@ void ACLobbyGameMode::StartGame()
 	if (world == nullptr)return;
 
 	bUseSeamlessTravel = true;
-	world->ServerTravel("/Game/Maps/Play?listen");
+	world->ServerTravel("/Game/Maps/Combat?listen");
 }

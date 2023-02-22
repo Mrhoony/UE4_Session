@@ -109,5 +109,19 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		UAnimMontage* TP_FireAnimation;
-};
 
+public:
+	UFUNCTION(Reliable, Server)
+		void OnServer();
+
+	UFUNCTION(NetMulticast, Reliable)
+		void OnNetMulticast();
+
+	UFUNCTION(Client, Reliable)
+		void OnClient();
+
+	UPROPERTY(Replicated)
+		int32 RandomValue_YesReplicated;
+	//UPROPERTY(NotReplicated)
+		int32 RandomValue_NoReplicated;
+};
