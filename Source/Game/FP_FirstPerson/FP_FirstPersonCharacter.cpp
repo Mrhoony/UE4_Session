@@ -1,6 +1,8 @@
 #include "FP_FirstPersonCharacter.h"
 #include "Global.h"
 
+#include "CBullet.h"
+
 #include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
@@ -8,13 +10,12 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 #define COLLISION_WEAPON		ECC_GameTraceChannel1
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
-
-//////////////////////////////////////////////////////////////////////////
-// AFP_FirstPersonCharacter
 
 AFP_FirstPersonCharacter::AFP_FirstPersonCharacter()
 {
@@ -59,10 +60,30 @@ AFP_FirstPersonCharacter::AFP_FirstPersonCharacter()
 	TP_Gun = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("TP_Gun"));
 	TP_Gun->SetupAttachment(GetMesh(), TEXT("GripPoint"));
 	TP_Gun->SetOwnerNoSee(true);
+
+	FP_GunShotParticle = CreateDefaultSubobject<UParticleSystemComponent>(TEXT("FP_GunShotParticle"));
+	FP_GunShotParticle->bAutoActivate = false;
+	FP_GunShotParticle->SetupAttachment(FP_Gun, "Muzzle");
+	FP_GunShotParticle->SetOnlyOwnerSee(true);
+
+	TP_GunShotParticle = CreateDefaultSubobject<UParticleSystemComponent>(TEXT("TP_GunShotParticle"));
+	TP_GunShotParticle->bAutoActivate = false;
+	TP_GunShotParticle->SetupAttachment(TP_Gun, "Muzzle");
+	TP_GunShotParticle->SetOwnerNoSee(true);
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Input
+void AFP_FirstPersonCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AFP_FirstPersonCharacter, CurrentTeam);
+}
+
+void AFP_FirstPersonCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (HasAuthority() == false) SetTeamColor(CurrentTeam);
+}
 
 void AFP_FirstPersonCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
@@ -93,11 +114,7 @@ void AFP_FirstPersonCharacter::SetupPlayerInputComponent(class UInputComponent* 
 
 void AFP_FirstPersonCharacter::OnFire()
 {
-	// Play a sound if there is one
-	if (FireSound != NULL)
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
-	}
+	
 
 	// Try and play a firing animation if specified
 	if (FireAnimation != NULL)
@@ -109,6 +126,9 @@ void AFP_FirstPersonCharacter::OnFire()
 			AnimInstance->Montage_Play(FireAnimation, 1.f);
 		}
 	}
+
+	if (FP_GunShotParticle != nullptr)
+		FP_GunShotParticle->Activate(true);
 
 	// Now send a trace from the end of our gun to see if we should hit anything
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
@@ -143,7 +163,50 @@ void AFP_FirstPersonCharacter::OnFire()
 		DamagedComponent->AddImpulseAtLocation(ShootDir * WeaponDamage, Impact.Location);
 	}
 
-	OnServer();
+	OnServerFire(StartTrace, EndTrace);
+}
+
+void AFP_FirstPersonCharacter::OnServerFire_Implementation(const FVector& LineStart, const FVector& LineEnd)
+{
+	MulticastFireEffect();
+}
+void AFP_FirstPersonCharacter::MulticastFireEffect_Implementation()
+{
+	if (TP_FireAnimation != nullptr)
+	{
+		UAnimInstance* animInstance = GetMesh()->GetAnimInstance();
+		if (animInstance != nullptr)
+		{
+			animInstance->Montage_Play(TP_FireAnimation, 1.f);
+		}
+	}
+
+	if (TP_GunShotParticle != nullptr)
+		TP_GunShotParticle->Activate(true);
+
+	if (FireSound != nullptr) 
+	{
+		// 멀티플레이의 사운드 재생 검색필요
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
+	}
+
+	GetWorld()->SpawnActor<ACBullet>(ACBullet::StaticClass(), FP_Gun->GetSocketLocation("Muzzle"), GetControlRotation());
+}
+void AFP_FirstPersonCharacter::SetTeamColor_Implementation(ETeamTypes InTeamType)
+{
+	FLinearColor color;
+	if (InTeamType == ETeamTypes::Blue)
+		color = FLinearColor(0.0f, 0.0f, 0.5f);
+	else
+		color = FLinearColor(0.5f, 0.0f, 0.0f);
+
+	if (DynamicMaterial == nullptr)
+	{
+		DynamicMaterial = UMaterialInstanceDynamic::Create(GetMesh()->GetMaterial(0), nullptr);
+		DynamicMaterial->SetVectorParameterValue("BodyColor", color);
+		GetMesh()->SetMaterial(0, DynamicMaterial);
+		FP_Mesh->SetMaterial(0, DynamicMaterial);
+	}
 }
 
 void AFP_FirstPersonCharacter::MoveForward(float Value)
@@ -154,7 +217,6 @@ void AFP_FirstPersonCharacter::MoveForward(float Value)
 		AddMovementInput(GetActorForwardVector(), Value);
 	}
 }
-
 void AFP_FirstPersonCharacter::MoveRight(float Value)
 {
 	if (Value != 0.0f)
@@ -163,13 +225,11 @@ void AFP_FirstPersonCharacter::MoveRight(float Value)
 		AddMovementInput(GetActorRightVector(), Value);
 	}
 }
-
 void AFP_FirstPersonCharacter::TurnAtRate(float Rate)
 {
 	// Calculate delta for this frame from the rate information
 	AddControllerYawInput(Rate * BaseTurnRate * GetWorld()->GetDeltaSeconds());
 }
-
 void AFP_FirstPersonCharacter::LookUpAtRate(float Rate)
 {
 	// Calculate delta for this frame from the rate information
@@ -188,56 +248,7 @@ FHitResult AFP_FirstPersonCharacter::WeaponTrace(const FVector& StartTrace, cons
 	return Hit;
 }
 
-void AFP_FirstPersonCharacter::OnServer_Implementation()
-{
-	//CLog::Print("Only Called On Server");
-
-	OnNetMulticast();
-	OnClient();
-	
-	RandomValue_YesReplicated++;
-}
-
-void AFP_FirstPersonCharacter::OnNetMulticast_Implementation()
-{
-	//CLog::Print("NetMulticast Called");
-
-	/*if (GetLocalRole() == ENetRole::ROLE_Authority)
-		CLog::Print("ROLE_Authority In NetMulticast", -1, 10.f, FColor::Purple);
-	if (GetLocalRole() == ENetRole::ROLE_AutonomousProxy)
-		CLog::Print("ROLE_AutonomousProxy In NetMulticast", -1, 10.f, FColor::Purple);
-	if (GetLocalRole() == ENetRole::ROLE_SimulatedProxy)
-		CLog::Print("ROLE_SimulatedProxy In NetMulticast", -1, 10.f, FColor::Purple);
-	if (GetLocalRole() == ENetRole::ROLE_MAX)
-		CLog::Print("ROLE_MAX In Client");
-	if (GetLocalRole() == ENetRole::ROLE_None)
-		CLog::Print("ROLE_None In Client");*/
-
-	CLog::Print("Replicated : " + FString::FromInt(RandomValue_YesReplicated));
-	CLog::Print("No Replicated : " + FString::FromInt(RandomValue_NoReplicated));
-}
-
-void AFP_FirstPersonCharacter::OnClient_Implementation()
-{
-	//CLog::Print("Only Called On Client");
-
-	/*if (GetLocalRole() == ENetRole::ROLE_Authority)
-		CLog::Print("ROLE_Authority In Client");
-	if (GetLocalRole() == ENetRole::ROLE_AutonomousProxy)
-		CLog::Print("ROLE_AutonomousProxy In Client");
-	if (GetLocalRole() == ENetRole::ROLE_SimulatedProxy)
-		CLog::Print("ROLE_SimulatedProxy In Client");
-	if (GetLocalRole() == ENetRole::ROLE_MAX)
-		CLog::Print("ROLE_MAX In Client");
-	if (GetLocalRole() == ENetRole::ROLE_None)
-		CLog::Print("ROLE_None In Client");*/
-
-	RandomValue_NoReplicated++;
-}
-
-void AFP_FirstPersonCharacter::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(AFP_FirstPersonCharacter, RandomValue_YesReplicated);
-}
+//void AActor::GetLifetimeReplicatedProps( TArray< FLifetimeProperty > & OutLifetimeProps ) const // 이 함수를 이용해야함
+//{
+//    DOREPLIFETIME( AActor, Owner ); // 등록을 해줘야한다 서버용 가비지컬렉터, 없을경우 복제하지 않아도 되므로
+//}

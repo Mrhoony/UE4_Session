@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "CGameState.h"
 #include "FP_FirstPersonCharacter.generated.h"
 
 class UInputComponent;
@@ -15,33 +16,31 @@ class AFP_FirstPersonCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
-
-
 public:
 	AFP_FirstPersonCharacter();
-
-
 
 protected:
 	/** Fires a virtual projectile. */
 	void OnFire();
 
-	/** Handles moving forward/backward */
+	UFUNCTION(Server, Reliable)
+		void OnServerFire(const FVector& LineStart, const FVector& LineEnd);
+	void OnServerFire_Implementation(const FVector& LineStart, const FVector& LineEnd);
+
+	UFUNCTION(NetMulticast, Unreliable)
+		void MulticastFireEffect();
+	void MulticastFireEffect_Implementation();
+
+public:
+	UFUNCTION(NetMulticast, Reliable)
+		void SetTeamColor(ETeamTypes InTeamType);
+	void SetTeamColor_Implementation(ETeamTypes InTeamType);
+
+protected:
+	void BeginPlay() override;
 	void MoveForward(float Val);
-
-	/** Handles strafing movement, left and right */
 	void MoveRight(float Val);
-
-	/**
-	 * Called via input to turn at a given rate.
-	 * @param Rate	This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
-	 */
 	void TurnAtRate(float Rate);
-
-	/**
-	 * Called via input to turn look up/down at a given rate.
-	 * @param Rate	This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
-	 */
 	void LookUpAtRate(float Rate);
 
 	/* 
@@ -92,6 +91,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		float WeaponDamage;
 
+	
+
 public:
 	// FP
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
@@ -103,6 +104,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 		UCameraComponent* Camera;
 
+	UPROPERTY(VisibleDefaultsOnly, Category = "Gameplay")
+		class UParticleSystemComponent* FP_GunShotParticle;
+
 	// TP
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 		USkeletalMeshComponent* TP_Gun;
@@ -110,18 +114,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		UAnimMontage* TP_FireAnimation;
 
+	UPROPERTY(VisibleDefaultsOnly, Category = "Gameplay")
+		class UParticleSystemComponent* TP_GunShotParticle;
+
+private:
+	class UMaterialInstanceDynamic* DynamicMaterial;
+	
 public:
-	UFUNCTION(Reliable, Server)
-		void OnServer();
-
-	UFUNCTION(NetMulticast, Reliable)
-		void OnNetMulticast();
-
-	UFUNCTION(Client, Reliable)
-		void OnClient();
-
 	UPROPERTY(Replicated)
-		int32 RandomValue_YesReplicated;
-	//UPROPERTY(NotReplicated)
-		int32 RandomValue_NoReplicated;
+		ETeamTypes CurrentTeam;
 };
