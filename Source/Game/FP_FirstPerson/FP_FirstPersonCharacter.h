@@ -31,12 +31,23 @@ protected:
 		void MulticastFireEffect();
 	void MulticastFireEffect_Implementation();
 
+	UFUNCTION(NetMulticast, Unreliable)
+	void PlayDamage();
+	void PlayDamage_Implementation();
+	UFUNCTION(NetMulticast, Unreliable)
+	void PlayDead();
+	void PlayDead_Implementation();
+
 public:
 	UFUNCTION(NetMulticast, Reliable)
 		void SetTeamColor(ETeamTypes InTeamType);
 	void SetTeamColor_Implementation(ETeamTypes InTeamType);
 
+	class ACPlayerState* GetSelfPlayerState();
+	void SetSelfPlayerState(class ACPlayerState* NewPlayerState);
+
 protected:
+	virtual void PossessedBy(AController* NewController) override;
 	void BeginPlay() override;
 	void MoveForward(float Val);
 	void MoveRight(float Val);
@@ -50,50 +61,43 @@ protected:
 	 * @param	EndTrac		Trace end point
 	 * @returns FHitResult returns a struct containing trace result - who/what the trace hit etc.
 	 */
-	FHitResult WeaponTrace(const FVector& StartTrace, const FVector& EndTrace) const;
+	FHitResult WeaponTrace(const FVector& StartTrace, const FVector& EndTrace);
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
 	// End of APawn interface
 
 public:
-	/** Returns FP_Mesh subobject **/
 	FORCEINLINE class USkeletalMeshComponent* GetMesh1P() const { return FP_Mesh; }
-	/** Returns Camera subobject **/
 	FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return Camera; }
 
+private:
+	UFUNCTION()
+		void Respawn();
+
 public:
-	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
 		float BaseTurnRate;
 
-	/** Base look up/down rate, in deg/sec. Other scaling may affect final rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
 		float BaseLookUpRate;
 
-	/** Gun muzzle's offset from the characters location */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		FVector GunOffset;
 
-	/** Sound to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		USoundBase* FireSound;
 
-	/** AnimMontage to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		UAnimMontage* FireAnimation;
 
-	/* This is when calculating the trace to determine what the weapon has hit */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		float WeaponRange;
 
-	/* This is multiplied by the direction vector when the weapon trace hits something to apply velocity to the component that is hit */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		float WeaponDamage;
 
-	
-
-public:
 	// FP
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 		USkeletalMeshComponent* FP_Mesh;
@@ -114,13 +118,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 		UAnimMontage* TP_FireAnimation;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+		UAnimMontage* TP_HitAnimation;
+
 	UPROPERTY(VisibleDefaultsOnly, Category = "Gameplay")
 		class UParticleSystemComponent* TP_GunShotParticle;
-
-private:
-	class UMaterialInstanceDynamic* DynamicMaterial;
 	
 public:
 	UPROPERTY(Replicated)
 		ETeamTypes CurrentTeam;
+	
+private:
+	class UMaterialInstanceDynamic* DynamicMaterial;
+	class ACPlayerState* SelfPlayerState;
 };

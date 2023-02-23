@@ -22,8 +22,8 @@ void ACSpawnPoint::BeginPlay()
 {
 	Super::BeginPlay();
 
-	OnActorBeginOverlap.AddDynamic(this, &ACSpawnPoint::OnActorBeginOverlap);
-	OnActorBeginOverlap.AddDynamic(this, &ACSpawnPoint::OnActorEndOverlap);
+	OnActorBeginOverlap.AddDynamic(this, &ACSpawnPoint::ActorBeginOverlap);
+	OnActorEndOverlap.AddDynamic(this, &ACSpawnPoint::ActorEndOverlap);
 }
 
 void ACSpawnPoint::Tick(float DeltaTime)
@@ -33,7 +33,7 @@ void ACSpawnPoint::Tick(float DeltaTime)
 	Capsule->UpdateOverlaps();
 }
 
-void ACSpawnPoint::OnActorBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
+void ACSpawnPoint::ActorBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
 	if (HasAuthority() == false) return;
 
@@ -41,6 +41,10 @@ void ACSpawnPoint::OnActorBeginOverlap(AActor* OverlappedActor, AActor* OtherAct
 		OverlappedActors.Add(OtherActor);
 }
 
-void ACSpawnPoint::OnActorEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
+void ACSpawnPoint::ActorEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
+	if (HasAuthority() == false) return;
+
+	if (OverlappedActors.Find(OtherActor) >= 0)
+		OverlappedActors.Remove(OtherActor);
 }
